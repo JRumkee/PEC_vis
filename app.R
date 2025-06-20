@@ -1,35 +1,32 @@
 # Load packages
-
+rm(list = ls())
 library(shiny)
 library(bslib)
 library(ggplot2)
 library(tidyverse)
 
+options(dplyr.summarise.inform = FALSE)
 
 
-file = ""
-data <- read.csv(file, skip = 2)
 # Load data
-
+file = "pearl_v_5_5_5_Tier1_25g.csv"
+myData <- read.csv(file, skip = 2)
 
 
 # Define UI
 
 ui <- page_sidebar(
   sidebar = sidebar(
-
+    fileInput("file1", "Choose File:", accept = ".csv"),
     # Select variable for y-axis0.1
     selectInput(
       inputId = "rate",
-      label = "Application Rate:",
-      choices = unique(data$Application.Rate),
-      selected = unique(data$Application.Rate)[1]
+      label = "Application Rate:",""
+
     ),
     selectInput(
       inputId = "freq",
-      label = "Application Frequency:",
-      choices = unique(data$Application.Frequency),
-      selected = unique(data$Application.Frequency)[1]
+      label = "Application Frequency:", ""
     ),
     # Select variable for x-axis
   #  selectInput(
@@ -99,17 +96,43 @@ CR = list("All" = c(1,2,3,4,5,6,7,8,9),
 server <- function(input, output, session) {
   
 
-  plot_subset =  reactive({data %>% group_by(Application.BBCH, scenario,Crop,Application.Rate,Application.Frequency,substance_evaluated) %>%
+  data <- reactive({
+    inFile <- input$file1
+    if(is.null(inFile)){
+      d <- myData
+    } else {
+      d <- read.csv(inFile$datapath, skip = 2)
+    }
+    d
+  })
+  
+  plot_subset =  reactive({data() %>% group_by(Application.BBCH, scenario,Crop,Application.Rate,Application.Frequency,substance_evaluated) %>%
       summarise(Outcome = if(pec_gw <= input$limit)"Pass" else "Fail") %>%
       filter( Application.Rate==input$rate,Application.Frequency==input$freq, scenario %in% scenarios[CR[[input$cnt]]])
     
   })
   
-  output$scatterplot <- renderPlot({   ggplot( data = plot_subset(), aes(x = substance_evaluated, y = scenario)) +
+  output$scatterplot <- renderPlot({ 
+    
+
+    ggplot( data = plot_subset(), aes(x = substance_evaluated, y = scenario)) +
       geom_tile(aes(fill = Outcome), color = "black")+ scale_fill_manual(values = c("Pass" = "blue", "Fail" = "red"))+
       xlab("Substance")+ ylab("Scenario") + facet_wrap(.~Application.BBCH)
-    
+
   })
+  
+  observe({
+    updateSelectInput(session, "rate",
+                      label = "Rate",
+                      choices = unique(data()$Application.Rate),
+                      selected = unique(data()$Application.Rate[1]))
+    
+    updateSelectInput(session, "freq",
+                      label = "Frequency",
+                       choices = unique(data()$Application.Frequency),
+                       selected = unique(data()$Application.Frequency[1]))
+  })
+  
 }
 
 # Create a Shiny app object
